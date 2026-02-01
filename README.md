@@ -9,3 +9,5 @@ Look into apple speech recognition api
 generate flashcards and need to figure out how to split values
 
 Implement study mode, test mode
+
+local storage free
