@@ -13,3 +13,5 @@ Implement study mode, test mode
 local storage free, cloud cost?
 
 MVVM architechture
+
+-  difficulty of questions
