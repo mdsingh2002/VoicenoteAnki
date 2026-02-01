@@ -15,3 +15,4 @@ local storage free, cloud cost?
 MVVM architechture
 
 -  difficulty of questions
+-  notification to study
