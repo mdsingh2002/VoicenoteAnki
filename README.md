@@ -1,1 +1,3 @@
 # VoicenoteAnki
+
+Language: Swift
