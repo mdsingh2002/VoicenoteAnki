@@ -2,4 +2,4 @@
 
 Language: Swift
 
-Need to find: Reliable voice transcriber framework, audio recording framework
+Need to find: Reliable voice transcriber framework, audio recording framework (playback feature?)
