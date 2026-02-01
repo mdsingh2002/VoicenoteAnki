@@ -10,10 +10,11 @@ generate flashcards and need to figure out how to split values
 
 Implement study mode, test mode
 
-local storage free, cloud cost?
+local storage free, cloud cost? 
 
 MVVM architechture
 
 -  difficulty of questions
 -  notification to study
 -  separate sets and try again buttons
+-  maybe decoration incentives?
