@@ -17,4 +17,4 @@ MVVM architechture
 -  difficulty of questions
 -  notification to study
 -  separate sets and try again buttons
--  maybe decoration incentives?
+-  maybe decoration incentives? or acheivements?
