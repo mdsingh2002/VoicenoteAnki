@@ -9,6 +9,9 @@ final class FlashcardsViewModel: ObservableObject {
     @Published private(set) var isGenerating = false
     @Published var errorMessage: String?
 
+    /// Deck waiting for user review before being committed to `decks`.
+    @Published private(set) var pendingDeck: FlashcardDeck?
+
     // Active study session
     @Published var activeDeck: FlashcardDeck?
     @Published private(set) var currentCardIndex: Int = 0
@@ -32,10 +35,38 @@ final class FlashcardsViewModel: ObservableObject {
         do {
             let cards = try await service.generateFlashcards(from: note.transcript, noteID: note.id)
             let deck  = FlashcardDeck(sourceNote: note, cards: cards)
-            decks.insert(deck, at: 0)
+            // Surface for preview; committed via confirmPendingDeck()
+            pendingDeck = deck
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    // MARK: - Pending deck management
+
+    /// User approved the preview — move the pending deck into the saved list.
+    func confirmPendingDeck(_ deck: FlashcardDeck) {
+        decks.insert(deck, at: 0)
+        pendingDeck = nil
+    }
+
+    /// User discarded the preview.
+    func discardPendingDeck() {
+        pendingDeck = nil
+    }
+
+    /// Edit a card inside the pending deck.
+    func updatePendingCard(_ card: Flashcard) {
+        guard var deck = pendingDeck,
+              let idx = deck.cards.firstIndex(where: { $0.id == card.id }) else { return }
+        deck.cards[idx] = card
+        pendingDeck = deck
+    }
+
+    func deletePendingCard(at offsets: IndexSet) {
+        guard var deck = pendingDeck else { return }
+        deck.cards.remove(atOffsets: offsets)
+        pendingDeck = deck
     }
 
     // MARK: - Study session
