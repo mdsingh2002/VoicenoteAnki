@@ -1,0 +1,58 @@
+name: Functional Tests
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  functional-tests:
+    name: Functional Tests
+    runs-on: macos-15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: |
+          sudo xcode-select -switch /Applications/Xcode_16.2.app
+          xcodebuild -version
+          swift --version
+
+      - name: Resolve dependencies
+        run: swift package resolve
+
+      - name: Build
+        run: swift build --configuration debug
+
+      - name: Run functional tests
+        run: |
+          swift test \
+            --configuration debug \
+            --parallel \
+            --filter "FlashcardLifecycleTests|StudySessionFunctionalTests" \
+            2>&1 | tee functional-test-output.log
+
+          # Exit with failure if any test failed
+          if grep -q "FAILED\|error:" functional-test-output.log; then
+            echo "One or more functional tests FAILED"
+            exit 1
+          fi
+        env:
+          CLAUDE_API_KEY: ""
+
+      - name: Show test summary
+        if: always()
+        run: |
+          echo "=== Functional Test Results ==="
+          grep -E "Test Case|PASSED|FAILED|Executed" functional-test-output.log || true
+
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: functional-test-logs
+          path: functional-test-output.log
+          retention-days: 7
