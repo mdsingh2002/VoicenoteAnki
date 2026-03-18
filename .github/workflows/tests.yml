@@ -1,0 +1,48 @@
+name: Tests
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  unit-tests:
+    name: Unit Tests
+    runs-on: macos-15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: |
+          sudo xcode-select -switch /Applications/Xcode_16.2.app
+          xcodebuild -version
+          swift --version
+
+      - name: Resolve dependencies
+        run: swift package resolve
+
+      - name: Build
+        run: swift build --configuration debug 2>&1 | tee build.log
+
+      - name: Run tests
+        run: |
+          swift test \
+            --configuration debug \
+            --parallel \
+            2>&1 | tee test-output.log
+        env:
+          # Prevent accidental real API calls in tests
+          CLAUDE_API_KEY: ""
+
+      - name: Upload build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: |
+            build.log
+            test-output.log
+          retention-days: 7
