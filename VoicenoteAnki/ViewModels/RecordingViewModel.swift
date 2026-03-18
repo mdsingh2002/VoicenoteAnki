@@ -19,6 +19,12 @@ final class RecordingViewModel: ObservableObject {
     private let transcriptionService = SpeechTranscriptionService()
     private var cancellables = Set<AnyCancellable>()
 
+    /// Shared across the app so decks persist between recording sessions.
+    let flashcardsVM = FlashcardsViewModel()
+
+    /// Set to true after a note is saved so the UI can prompt the user.
+    @Published private(set) var latestNote: VoiceNote?
+
     init() {
         audioService.$isRecording
             .assign(to: &$isRecording)
@@ -91,6 +97,9 @@ final class RecordingViewModel: ObservableObject {
     private func saveNote(fileURL: URL, transcript: String, duration: TimeInterval) {
         let note = VoiceNote(audioFileURL: fileURL, transcript: transcript, duration: duration)
         savedNotes.insert(note, at: 0)
+        latestNote = note
+        // Auto-generate flashcards in the background
+        Task { await flashcardsVM.generateDeck(for: note) }
     }
 
     // MARK: - Helpers
