@@ -2,13 +2,11 @@ import SwiftUI
 
 struct RecordingView: View {
 
-    @StateObject private var vm = RecordingViewModel()
-    @State private var showTranscript = false
+    @ObservedObject var vm: RecordingViewModel
     @State private var pulseScale: CGFloat = 1.0
 
     var body: some View {
         ZStack {
-            // MARK: - Background gradient
             backgroundGradient
 
             VStack(spacing: 0) {
@@ -26,17 +24,22 @@ struct RecordingView: View {
 
                 Spacer().frame(height: 40)
 
-                // Record button
                 recordButton
 
                 Spacer().frame(height: 32)
 
-                // Duration / status label
                 statusLabel
+
+                // Flashcard generation status pill
+                if vm.flashcardsVM.isGenerating {
+                    generatingPill
+                        .transition(.scale.combined(with: .opacity))
+                        .padding(.top, 8)
+                }
 
                 Spacer()
 
-                // Live transcript card
+                // Live / final transcript card
                 if !vm.liveTranscript.isEmpty || !vm.finalTranscript.isEmpty {
                     transcriptCard
                         .padding(.horizontal, 20)
@@ -54,6 +57,7 @@ struct RecordingView: View {
             Text(vm.errorMessage ?? "")
         }
         .animation(.spring(duration: 0.4), value: vm.liveTranscript.isEmpty && vm.finalTranscript.isEmpty)
+        .animation(.spring(duration: 0.35), value: vm.flashcardsVM.isGenerating)
     }
 
     // MARK: - Subviews
@@ -82,7 +86,6 @@ struct RecordingView: View {
                     .foregroundStyle(.white.opacity(0.55))
             }
             Spacer()
-            // Notes count badge
             if !vm.savedNotes.isEmpty {
                 Text("\(vm.savedNotes.count)")
                     .font(.caption.bold())
@@ -101,7 +104,6 @@ struct RecordingView: View {
     private var recordButton: some View {
         Button(action: vm.toggleRecording) {
             ZStack {
-                // Outer pulse ring when recording
                 if vm.isRecording {
                     Circle()
                         .strokeBorder(
@@ -117,13 +119,9 @@ struct RecordingView: View {
                         .opacity(2 - pulseScale)
                 }
 
-                // Main glass button
                 Circle()
                     .frame(width: 90, height: 90)
-                    .glassEffect(
-                        .regular.interactive(),
-                        in: Circle()
-                    )
+                    .glassEffect(.regular.interactive(), in: Circle())
                     .overlay {
                         Image(systemName: vm.isRecording ? "stop.fill" : "mic.fill")
                             .font(.system(size: 32, weight: .medium))
@@ -157,9 +155,7 @@ struct RecordingView: View {
                 }
             } else if vm.isTranscribing {
                 HStack(spacing: 8) {
-                    ProgressView()
-                        .tint(.white)
-                        .scaleEffect(0.8)
+                    ProgressView().tint(.white).scaleEffect(0.8)
                     Text("Transcribing…")
                         .font(.subheadline)
                         .foregroundStyle(.white.opacity(0.7))
@@ -172,6 +168,18 @@ struct RecordingView: View {
         }
         .animation(.easeInOut(duration: 0.25), value: vm.isRecording)
         .animation(.easeInOut(duration: 0.25), value: vm.isTranscribing)
+    }
+
+    private var generatingPill: some View {
+        HStack(spacing: 8) {
+            ProgressView().tint(.white).scaleEffect(0.75)
+            Text("Generating flashcards…")
+                .font(.caption.bold())
+                .foregroundStyle(.white.opacity(0.75))
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .glassEffect(.regular, in: Capsule())
     }
 
     private var transcriptCard: some View {
@@ -206,5 +214,5 @@ struct RecordingView: View {
 }
 
 #Preview {
-    RecordingView()
+    RecordingView(vm: RecordingViewModel())
 }
