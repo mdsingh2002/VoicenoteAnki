@@ -2,6 +2,7 @@ import SwiftUI
 
 struct FlashcardsView: View {
     @ObservedObject var vm: FlashcardsViewModel
+    var onTapAPIKey: (() -> Void)? = nil
 
     var body: some View {
         ZStack {
@@ -20,9 +21,71 @@ struct FlashcardsView: View {
 
     private var deckListView: some View {
         VStack(spacing: 0) {
-            headerBar(title: "Flashcard Decks", subtitle: "\(vm.decks.count) deck\(vm.decks.count == 1 ? "" : "s")")
-                .padding(.top, 8)
+            // Header with API key button
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Flashcard Decks")
+                        .font(.title2.bold())
+                        .foregroundStyle(.white)
+                    Text("\(vm.decks.count) deck\(vm.decks.count == 1 ? "" : "s")")
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.5))
+                }
+                Spacer()
+                // API key indicator / button
+                Button { onTapAPIKey?() } label: {
+                    Image(systemName: APIKeyService.shared.hasKey ? "key.fill" : "key")
+                        .font(.body)
+                        .foregroundStyle(APIKeyService.shared.hasKey ? .white : .orange)
+                        .padding(10)
+                        .glassEffect(.regular.interactive(), in: Circle())
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 14)
+            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .padding(.top, 8)
+            .padding(.horizontal, 16)
+
+            // Generating indicator
+            if vm.isGenerating {
+                HStack(spacing: 8) {
+                    ProgressView().tint(.white).scaleEffect(0.8)
+                    Text("Generating flashcards…")
+                        .font(.caption.bold())
+                        .foregroundStyle(.white.opacity(0.7))
+                }
                 .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .glassEffect(.regular, in: Capsule())
+                .padding(.top, 10)
+                .transition(.scale.combined(with: .opacity))
+            }
+
+            // Error banner with retry hidden here — retry is triggered from RecordingView
+            if let error = vm.errorMessage {
+                HStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle")
+                        .foregroundStyle(.orange)
+                    Text(error)
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.75))
+                        .lineLimit(2)
+                    Spacer()
+                    Button { vm.errorMessage = nil } label: {
+                        Image(systemName: "xmark")
+                            .font(.caption.bold())
+                            .foregroundStyle(.white.opacity(0.5))
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(12)
+                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .padding(.horizontal, 16)
+                .padding(.top, 10)
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
 
             if vm.decks.isEmpty {
                 emptyState

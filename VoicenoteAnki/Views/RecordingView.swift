@@ -184,12 +184,38 @@ struct RecordingView: View {
 
     private var transcriptCard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label(
-                vm.isRecording ? "Live Transcript" : "Transcript",
-                systemImage: vm.isRecording ? "waveform" : "text.bubble"
-            )
-            .font(.caption.bold())
-            .foregroundStyle(.white.opacity(0.6))
+            HStack {
+                Label(
+                    vm.isRecording ? "Live Transcript" : "Transcript",
+                    systemImage: vm.isRecording ? "waveform" : "text.bubble"
+                )
+                .font(.caption.bold())
+                .foregroundStyle(.white.opacity(0.6))
+
+                Spacer()
+
+                // Manual generate / retry button (only when not recording and transcript exists)
+                if !vm.isRecording, let note = vm.latestNote, !note.transcript.isEmpty {
+                    if vm.flashcardsVM.isGenerating {
+                        ProgressView().tint(.white).scaleEffect(0.7)
+                    } else {
+                        Button {
+                            Task { await vm.flashcardsVM.generateDeck(for: note) }
+                        } label: {
+                            Label(
+                                APIKeyService.shared.hasKey ? "Generate" : "Add Key",
+                                systemImage: APIKeyService.shared.hasKey ? "rectangle.stack.badge.plus" : "key"
+                            )
+                            .font(.caption.bold())
+                            .foregroundStyle(APIKeyService.shared.hasKey ? .white : .orange)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .glassEffect(.regular.interactive(), in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
 
             ScrollView {
                 Text(vm.isRecording ? vm.liveTranscript : vm.finalTranscript)
