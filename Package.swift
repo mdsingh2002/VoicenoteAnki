@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "VoicenoteAnki",
-    platforms: [.iOS(.v17)],
+    platforms: [.iOS(.v17), .macOS(.v14)],
     targets: [
         // Library target — excludes the app entry point, ContentView, and Views
         // (Views use iOS 26 .glassEffect() API and are not under test)
