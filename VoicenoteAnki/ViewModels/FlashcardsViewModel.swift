@@ -20,6 +20,16 @@ final class FlashcardsViewModel: ObservableObject {
 
     // MARK: - Private
     private let service = FlashcardGenerationService()
+    private let persistence: PersistenceService
+
+    // MARK: - Init
+
+    init(persistence: PersistenceService = .shared) {
+        self.persistence = persistence
+        if let saved = try? persistence.load() {
+            _decks = Published(initialValue: saved)
+        }
+    }
 
     // MARK: - Generation
 
@@ -48,6 +58,7 @@ final class FlashcardsViewModel: ObservableObject {
     func confirmPendingDeck(_ deck: FlashcardDeck) {
         decks.insert(deck, at: 0)
         pendingDeck = nil
+        try? persistence.save(decks)
     }
 
     /// User discarded the preview.
@@ -131,5 +142,6 @@ final class FlashcardsViewModel: ObservableObject {
 
     func deleteDeck(at offsets: IndexSet) {
         decks.remove(atOffsets: offsets)
+        try? persistence.save(decks)
     }
 }
