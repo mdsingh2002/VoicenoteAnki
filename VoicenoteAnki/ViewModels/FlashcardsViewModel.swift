@@ -144,4 +144,18 @@ final class FlashcardsViewModel: ObservableObject {
         decks.remove(atOffsets: offsets)
         try? persistence.save(decks)
     }
+
+    // MARK: - Card editing on saved decks
+
+    /// Update a card in a saved deck (e.g. after adding/removing attachments).
+    func updateCard(_ card: Flashcard, in deck: FlashcardDeck) {
+        guard let deckIdx = decks.firstIndex(where: { $0.id == deck.id }),
+              let cardIdx = decks[deckIdx].cards.firstIndex(where: { $0.id == card.id }) else { return }
+        decks[deckIdx].cards[cardIdx] = card
+        // Keep activeDeck in sync if it's the current study deck
+        if activeDeck?.id == deck.id {
+            activeDeck = decks[deckIdx]
+        }
+        try? persistence.save(decks)
+    }
 }

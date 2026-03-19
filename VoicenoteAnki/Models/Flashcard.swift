@@ -18,6 +18,30 @@ enum Difficulty: String, CaseIterable, Codable {
     }
 }
 
+// MARK: - CardAttachment
+
+enum AttachmentType: String, Codable {
+    case image
+    case pdf
+    case audio
+    case other
+}
+
+struct CardAttachment: Identifiable, Codable, Equatable {
+    let id: UUID
+    var fileName: String
+    var type: AttachmentType
+    /// Relative path from Documents directory (for portability)
+    var relativePath: String
+
+    init(id: UUID = UUID(), fileName: String, type: AttachmentType, relativePath: String) {
+        self.id = id
+        self.fileName = fileName
+        self.type = type
+        self.relativePath = relativePath
+    }
+}
+
 // MARK: - Flashcard
 
 struct Flashcard: Identifiable, Codable, Equatable {
@@ -27,6 +51,9 @@ struct Flashcard: Identifiable, Codable, Equatable {
     var tags: [String]
     var difficulty: Difficulty
     let sourceNoteID: UUID
+
+    // Attachments
+    var attachments: [CardAttachment] = []
 
     // Study state (not persisted in this version)
     var isStarred: Bool = false
@@ -39,7 +66,8 @@ struct Flashcard: Identifiable, Codable, Equatable {
         back: String,
         tags: [String] = [],
         difficulty: Difficulty = .medium,
-        sourceNoteID: UUID
+        sourceNoteID: UUID,
+        attachments: [CardAttachment] = []
     ) {
         self.id = id
         self.front = front
@@ -47,6 +75,7 @@ struct Flashcard: Identifiable, Codable, Equatable {
         self.tags = tags
         self.difficulty = difficulty
         self.sourceNoteID = sourceNoteID
+        self.attachments = attachments
     }
 }
 
