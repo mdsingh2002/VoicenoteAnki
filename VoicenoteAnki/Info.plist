@@ -14,5 +14,19 @@
     </array>
     <key>UIRequiresFullScreen</key>
     <true/>
+    <!-- Google Sign-In: replace YOUR_REVERSED_CLIENT_ID with the value from
+         your GoogleService-Info.plist (REVERSED_CLIENT_ID field). -->
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>YOUR_REVERSED_CLIENT_ID</string>
+            </array>
+        </dict>
+    </array>
+    <!-- GIDClientID: paste your OAuth 2.0 client ID from Google Cloud Console. -->
+    <key>GIDClientID</key>
+    <string>YOUR_CLIENT_ID.apps.googleusercontent.com</string>
 </dict>
 </plist>

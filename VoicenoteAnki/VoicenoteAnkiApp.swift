@@ -1,4 +1,5 @@
 import SwiftUI
+import GoogleSignIn
 
 @main
 struct VoicenoteAnkiApp: App {
@@ -10,6 +11,10 @@ struct VoicenoteAnkiApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                // Forward OAuth redirect URLs to the Google Sign-In SDK.
+                .onOpenURL { url in
+                    GoogleSignInService.shared.handle(url)
+                }
         }
     }
 }
