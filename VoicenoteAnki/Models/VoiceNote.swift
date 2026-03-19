@@ -1,6 +1,6 @@
 import Foundation
 
-struct VoiceNote: Identifiable {
+struct VoiceNote: Identifiable, Codable {
     let id: UUID
     let date: Date
     let audioFileURL: URL

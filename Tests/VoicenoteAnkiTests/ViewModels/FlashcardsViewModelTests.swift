@@ -400,4 +400,52 @@ final class FlashcardsViewModelTests: XCTestCase {
         viewModel.deletePendingCard(at: IndexSet([0])) // Should not crash
         XCTAssertNil(viewModel.pendingDeck)
     }
+
+    // MARK: - Persistence Integration
+
+    func testViewModelLoadsPersistedDecksOnInit() throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let persistence = PersistenceService(directoryURL: tempDir)
+        let deck = makeDeck()
+        try persistence.save([deck])
+
+        let freshViewModel = FlashcardsViewModel(persistence: persistence)
+        XCTAssertEqual(freshViewModel.decks.count, 1)
+        XCTAssertEqual(freshViewModel.decks[0].id, deck.id)
+    }
+
+    func testConfirmPendingDeckPersistsToDisk() throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let persistence = PersistenceService(directoryURL: tempDir)
+        let vm = FlashcardsViewModel(persistence: persistence)
+        let deck = makeDeck()
+        vm.confirmPendingDeck(deck)
+
+        let loaded = try persistence.load()
+        XCTAssertEqual(loaded.count, 1)
+        XCTAssertEqual(loaded[0].id, deck.id)
+    }
+
+    func testDeleteDeckPersistsToDisk() throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let persistence = PersistenceService(directoryURL: tempDir)
+        let vm = FlashcardsViewModel(persistence: persistence)
+        let deck = makeDeck()
+        vm.confirmPendingDeck(deck)
+        XCTAssertEqual(vm.decks.count, 1)
+
+        vm.deleteDeck(at: IndexSet([0]))
+
+        let loaded = try persistence.load()
+        XCTAssertTrue(loaded.isEmpty)
+    }
 }

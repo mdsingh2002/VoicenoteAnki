@@ -52,7 +52,7 @@ struct Flashcard: Identifiable, Codable, Equatable {
 
 // MARK: - FlashcardDeck
 
-struct FlashcardDeck: Identifiable {
+struct FlashcardDeck: Identifiable, Codable {
     let id: UUID
     let sourceNote: VoiceNote
     var cards: [Flashcard]
