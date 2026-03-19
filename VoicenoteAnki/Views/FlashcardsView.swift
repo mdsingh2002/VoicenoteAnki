@@ -4,6 +4,8 @@ struct FlashcardsView: View {
     @ObservedObject var vm: FlashcardsViewModel
     var onTapAPIKey: (() -> Void)? = nil
 
+    @State private var editingCard: Flashcard?
+
     var body: some View {
         ZStack {
             backgroundGradient
@@ -15,6 +17,13 @@ struct FlashcardsView: View {
             }
         }
         .animation(.spring(duration: 0.4), value: vm.activeDeck?.id)
+        .sheet(item: $editingCard) { card in
+            if let deck = vm.activeDeck {
+                CardEditorSheet(card: card) { updated in
+                    vm.updateCard(updated, in: deck)
+                }
+            }
+        }
     }
 
     // MARK: - Deck list
@@ -188,7 +197,8 @@ struct FlashcardsView: View {
                     isShowingBack: vm.isShowingBack,
                     onFlip: vm.flipCard,
                     onSwipeLeft: vm.nextCard,
-                    onSwipeRight: vm.previousCard
+                    onSwipeRight: vm.previousCard,
+                    voiceNoteURL: deck.sourceNote.audioFileURL
                 )
                 .padding(.horizontal, 20)
                 .id(card.id)           // forces full re-render on card change
@@ -233,8 +243,20 @@ struct FlashcardsView: View {
 
             Spacer()
 
-            // Placeholder to balance the back button
-            Color.clear.frame(width: 44, height: 44)
+            // Edit current card (add attachments, etc.)
+            Button {
+                if let card = vm.currentCard {
+                    editingCard = card
+                }
+            } label: {
+                Image(systemName: "pencil")
+                    .font(.body.bold())
+                    .foregroundStyle(.white)
+                    .padding(10)
+                    .glassEffect(.regular.interactive(), in: Circle())
+            }
+            .buttonStyle(.plain)
+            .opacity(vm.currentCard != nil ? 1 : 0)
         }
         .padding(.vertical, 10)
         .padding(.horizontal, 14)
