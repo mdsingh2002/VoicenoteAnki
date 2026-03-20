@@ -57,18 +57,51 @@ struct FlashcardsView: View {
             .padding(.top, 8)
             .padding(.horizontal, 16)
 
-            // Generating indicator
+            // Queue status pill (generating / queued)
             if vm.isGenerating {
                 HStack(spacing: 8) {
                     ProgressView().tint(.white).scaleEffect(0.8)
-                    Text("Generating flashcards…")
-                        .font(.caption.bold())
-                        .foregroundStyle(.white.opacity(0.7))
+                    if vm.queueDepth > 1 {
+                        Text("\(vm.queueDepth) in queue…")
+                    } else {
+                        Text("Generating flashcards…")
+                    }
                 }
+                .font(.caption.bold())
+                .foregroundStyle(.white.opacity(0.7))
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
                 .glassEffect(.regular, in: Capsule())
                 .padding(.top, 10)
+                .transition(.scale.combined(with: .opacity))
+            }
+
+            // Dead-letter retry banner
+            if vm.deadLetterCount > 0 {
+                HStack(spacing: 8) {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .foregroundStyle(.orange)
+                    Text("\(vm.deadLetterCount) generation\(vm.deadLetterCount == 1 ? "" : "s") failed")
+                        .font(.caption.bold())
+                        .foregroundStyle(.white.opacity(0.75))
+                    Spacer()
+                    Button {
+                        Task { await vm.retryDeadLetters() }
+                    } label: {
+                        Text("Retry")
+                            .font(.caption.bold())
+                            .foregroundStyle(.orange)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .glassEffect(.regular.interactive(), in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .padding(.horizontal, 16)
+                .padding(.top, 6)
                 .transition(.scale.combined(with: .opacity))
             }
 
