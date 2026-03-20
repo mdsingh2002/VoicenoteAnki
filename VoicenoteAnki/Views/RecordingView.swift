@@ -173,9 +173,15 @@ struct RecordingView: View {
     private var generatingPill: some View {
         HStack(spacing: 8) {
             ProgressView().tint(.white).scaleEffect(0.75)
-            Text("Generating flashcards…")
-                .font(.caption.bold())
-                .foregroundStyle(.white.opacity(0.75))
+            if vm.flashcardsVM.queueDepth > 1 {
+                Text("\(vm.flashcardsVM.queueDepth) in queue…")
+                    .font(.caption.bold())
+                    .foregroundStyle(.white.opacity(0.75))
+            } else {
+                Text("Generating flashcards…")
+                    .font(.caption.bold())
+                    .foregroundStyle(.white.opacity(0.75))
+            }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)

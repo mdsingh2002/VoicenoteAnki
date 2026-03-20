@@ -18,9 +18,18 @@ final class FlashcardsViewModel: ObservableObject {
     @Published private(set) var isShowingBack = false
     @Published private(set) var sessionComplete = false
 
+    // MARK: - Queue metrics (exposed for UI)
+
+    /// Total messages currently pending or in-flight.
+    @Published private(set) var queueDepth: Int = 0
+    /// Messages that exhausted all retry attempts.
+    @Published private(set) var deadLetterCount: Int = 0
+
     // MARK: - Private
-    private let service = FlashcardGenerationService()
+    private let queue = GenerationQueueService.shared
     private let persistence: PersistenceService
+    private var subscriberID: UUID?
+    private var consumerTask: Task<Void, Never>?
 
     // MARK: - Init
 
@@ -29,27 +38,64 @@ final class FlashcardsViewModel: ObservableObject {
         if let saved = try? persistence.load() {
             _decks = Published(initialValue: saved)
         }
+        startConsuming()
     }
 
-    // MARK: - Generation
+    deinit {
+        consumerTask?.cancel()
+    }
 
-    func generateDeck(for note: VoiceNote) async {
+    // MARK: - Queue Consumer
+
+    /// Subscribe to the shared GenerationQueueService and process incoming results.
+    /// Mirrors an AMQP `basic.consume` call – runs for the lifetime of the ViewModel.
+    private func startConsuming() {
+        consumerTask = Task { [weak self] in
+            guard let self else { return }
+
+            let (id, stream) = await queue.subscribe()
+            subscriberID = id
+
+            for await result in stream {
+                guard !Task.isCancelled else { break }
+                handleResult(result)
+                // Refresh queue-depth metrics after each delivery
+                let m = await queue.metrics
+                queueDepth      = m.pending + m.processing
+                deadLetterCount = m.deadLettered
+                isGenerating    = queueDepth > 0
+            }
+        }
+    }
+
+    private func handleResult(_ result: GenerationResult) {
+        switch result.outcome {
+        case .success(let deck):
+            pendingDeck  = deck
+            errorMessage = nil
+        case .deadLetter(let error):
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    // MARK: - Generation (publishes to the message queue)
+
+    /// Enqueue a voice note for flashcard generation.
+    ///
+    /// The call returns immediately after publishing to the queue.
+    /// The result is delivered asynchronously via the consumer subscription.
+    func generateDeck(for note: VoiceNote, priority: MessagePriority = .normal) async {
         guard !note.transcript.isEmpty else {
             errorMessage = "No transcript yet — finish recording first."
             return
         }
-        isGenerating = true
         errorMessage = nil
-        defer { isGenerating = false }
+        await queue.publish(note: note, priority: priority)
 
-        do {
-            let cards = try await service.generateFlashcards(from: note.transcript, noteID: note.id)
-            let deck  = FlashcardDeck(sourceNote: note, cards: cards)
-            // Surface for preview; committed via confirmPendingDeck()
-            pendingDeck = deck
-        } catch {
-            errorMessage = error.localizedDescription
-        }
+        // Optimistically update depth so the UI reflects the new job immediately
+        let m = await queue.metrics
+        queueDepth   = m.pending + m.processing
+        isGenerating = queueDepth > 0
     }
 
     // MARK: - Pending deck management
@@ -80,17 +126,28 @@ final class FlashcardsViewModel: ObservableObject {
         pendingDeck = deck
     }
 
+    // MARK: - Dead-letter queue management
+
+    /// Requeue all dead-lettered messages for another delivery attempt.
+    func retryDeadLetters() async {
+        await queue.requeueDeadLetters()
+        let m = await queue.metrics
+        deadLetterCount = m.deadLettered
+        queueDepth      = m.pending + m.processing
+        isGenerating    = queueDepth > 0
+    }
+
     // MARK: - Study session
 
     func startStudySession(deck: FlashcardDeck) {
-        activeDeck      = deck
+        activeDeck       = deck
         currentCardIndex = 0
-        isShowingBack   = false
-        sessionComplete = false
+        isShowingBack    = false
+        sessionComplete  = false
     }
 
     func endStudySession() {
-        activeDeck = nil
+        activeDeck      = nil
         sessionComplete = false
     }
 
