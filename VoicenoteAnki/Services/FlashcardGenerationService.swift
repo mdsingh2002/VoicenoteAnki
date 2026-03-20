@@ -26,30 +26,94 @@ enum FlashcardGenerationError: LocalizedError {
 
 final class FlashcardGenerationService {
 
-    /// Set at app launch or from Settings. In production load from Keychain.
-    static var apiKey: String = ProcessInfo.processInfo.environment["CLAUDE_API_KEY"] ?? ""
+    /// Shared load balancer. Configure additional keys via `loadBalancer.addKey(_:)`.
+    static let loadBalancer = LoadBalancerService(
+        keys: [ProcessInfo.processInfo.environment["CLAUDE_API_KEY"] ?? ""],
+        strategy: .roundRobin
+    )
+
+    /// Convenience setter kept for backward-compatibility with APIKeyService.
+    static var apiKey: String = ProcessInfo.processInfo.environment["CLAUDE_API_KEY"] ?? "" {
+        didSet {
+            Task { await loadBalancer.setKeys([apiKey]) }
+        }
+    }
 
     private let endpoint = URL(string: "https://api.anthropic.com/v1/messages")!
     private let model    = "claude-haiku-4-5-20251001"
 
+    /// Maximum number of times to retry using a different key on rate-limit errors.
+    var maxRetries: Int = 3
+
     // MARK: - Public
 
     /// Generate flashcards from a voice-note transcript.
+    /// On HTTP 429 the current key is marked rate-limited and the request is
+    /// automatically retried with the next available key (up to `maxRetries`).
     func generateFlashcards(from transcript: String, noteID: UUID) async throws -> [Flashcard] {
         guard !transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw FlashcardGenerationError.emptyTranscript
         }
-        let key = Self.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !key.isEmpty else { throw FlashcardGenerationError.missingAPIKey }
+
+        let lb = Self.loadBalancer
+
+        // Ensure at least one key exists before looping
+        guard await lb.keyCount > 0 else {
+            throw FlashcardGenerationError.missingAPIKey
+        }
+
+        var lastError: Error = FlashcardGenerationError.missingAPIKey
+        let attempts = maxRetries + 1
+
+        for attempt in 0..<attempts {
+            let key: String
+            do {
+                key = try await lb.acquireKey()
+            } catch {
+                // All keys are rate-limited – surface the last API error
+                throw lastError
+            }
+
+            var rateLimited = false
+            defer { Task { await lb.releaseKey(key, rateLimited: rateLimited) } }
+
+            do {
+                let result = try await performRequest(
+                    transcript: transcript,
+                    noteID: noteID,
+                    apiKey: key
+                )
+                return result
+            } catch FlashcardGenerationError.apiError(let msg) where msg.contains("429") || msg.lowercased().contains("rate") {
+                rateLimited = true
+                lastError = FlashcardGenerationError.apiError(msg)
+                // Small back-off before next attempt (exponential: 1s, 2s, 4s…)
+                let delay = pow(2.0, Double(attempt))
+                try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                continue
+            } catch {
+                throw error
+            }
+        }
+
+        throw lastError
+    }
+
+    // MARK: - Private helpers
+
+    private func performRequest(transcript: String, noteID: UUID, apiKey key: String) async throws -> [Flashcard] {
+        guard !key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw FlashcardGenerationError.missingAPIKey
+        }
 
         let prompt = buildPrompt(transcript: transcript)
         let body   = buildRequestBody(prompt: prompt)
 
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
-        request.setValue("application/json",     forHTTPHeaderField: "Content-Type")
-        request.setValue(key,                    forHTTPHeaderField: "x-api-key")
-        request.setValue("2023-06-01",           forHTTPHeaderField: "anthropic-version")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(key,                forHTTPHeaderField: "x-api-key")
+        request.setValue("2023-06-01",       forHTTPHeaderField: "anthropic-version")
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
         let (data, response): (Data, URLResponse)
@@ -61,13 +125,15 @@ final class FlashcardGenerationService {
 
         if let http = response as? HTTPURLResponse, http.statusCode != 200 {
             let msg = (try? JSONDecoder().decode(AnthropicErrorResponse.self, from: data))?.error.message
-            throw FlashcardGenerationError.apiError(msg ?? "HTTP \(http.statusCode)")
+            let statusMsg = msg.map { "\($0)" } ?? "HTTP \(http.statusCode)"
+            // Embed the status code so the retry loop can detect 429s
+            throw FlashcardGenerationError.apiError(
+                http.statusCode == 429 ? "429 \(statusMsg)" : statusMsg
+            )
         }
 
         return try parseResponse(data: data, noteID: noteID)
     }
-
-    // MARK: - Private helpers
 
     private func buildPrompt(transcript: String) -> String {
         """
