@@ -41,9 +41,14 @@ final class FlashcardGenerationService {
 
     private let endpoint = URL(string: "https://api.anthropic.com/v1/messages")!
     private let model    = "claude-haiku-4-5-20251001"
+    private let session: URLSession
 
     /// Maximum number of times to retry using a different key on rate-limit errors.
     var maxRetries: Int = 3
+
+    init(session: URLSession = .shared) {
+        self.session = session
+    }
 
     // MARK: - Public
 
@@ -118,7 +123,7 @@ final class FlashcardGenerationService {
 
         let (data, response): (Data, URLResponse)
         do {
-            (data, response) = try await URLSession.shared.data(for: request)
+            (data, response) = try await session.data(for: request)
         } catch {
             throw FlashcardGenerationError.networkError(error)
         }
