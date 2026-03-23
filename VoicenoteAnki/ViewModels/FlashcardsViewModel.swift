@@ -6,6 +6,7 @@ final class FlashcardsViewModel: ObservableObject {
 
     // MARK: - Published state
     @Published private(set) var decks: [FlashcardDeck] = []
+    @Published private(set) var folders: [Folder] = []
     @Published private(set) var isGenerating = false
     @Published var errorMessage: String?
 
@@ -38,6 +39,9 @@ final class FlashcardsViewModel: ObservableObject {
         if let saved = try? persistence.load() {
             _decks = Published(initialValue: saved)
         }
+        if let savedFolders = try? persistence.loadFolders() {
+            _folders = Published(initialValue: savedFolders)
+        }
         startConsuming()
     }
 
@@ -48,7 +52,6 @@ final class FlashcardsViewModel: ObservableObject {
     // MARK: - Queue Consumer
 
     /// Subscribe to the shared GenerationQueueService and process incoming results.
-    /// Mirrors an AMQP `basic.consume` call – runs for the lifetime of the ViewModel.
     private func startConsuming() {
         consumerTask = Task { [weak self] in
             guard let self else { return }
@@ -59,7 +62,6 @@ final class FlashcardsViewModel: ObservableObject {
             for await result in stream {
                 guard !Task.isCancelled else { break }
                 handleResult(result)
-                // Refresh queue-depth metrics after each delivery
                 let m = await queue.metrics
                 queueDepth      = m.pending + m.processing
                 deadLetterCount = m.deadLettered
@@ -78,12 +80,8 @@ final class FlashcardsViewModel: ObservableObject {
         }
     }
 
-    // MARK: - Generation (publishes to the message queue)
+    // MARK: - Generation
 
-    /// Enqueue a voice note for flashcard generation.
-    ///
-    /// The call returns immediately after publishing to the queue.
-    /// The result is delivered asynchronously via the consumer subscription.
     func generateDeck(for note: VoiceNote, priority: MessagePriority = .normal) async {
         guard !note.transcript.isEmpty else {
             errorMessage = "No transcript yet — finish recording first."
@@ -92,7 +90,6 @@ final class FlashcardsViewModel: ObservableObject {
         errorMessage = nil
         await queue.publish(note: note, priority: priority)
 
-        // Optimistically update depth so the UI reflects the new job immediately
         let m = await queue.metrics
         queueDepth   = m.pending + m.processing
         isGenerating = queueDepth > 0
@@ -107,12 +104,10 @@ final class FlashcardsViewModel: ObservableObject {
         try? persistence.save(decks)
     }
 
-    /// User discarded the preview.
     func discardPendingDeck() {
         pendingDeck = nil
     }
 
-    /// Edit a card inside the pending deck.
     func updatePendingCard(_ card: Flashcard) {
         guard var deck = pendingDeck,
               let idx = deck.cards.firstIndex(where: { $0.id == card.id }) else { return }
@@ -128,13 +123,57 @@ final class FlashcardsViewModel: ObservableObject {
 
     // MARK: - Dead-letter queue management
 
-    /// Requeue all dead-lettered messages for another delivery attempt.
     func retryDeadLetters() async {
         await queue.requeueDeadLetters()
         let m = await queue.metrics
         deadLetterCount = m.deadLettered
         queueDepth      = m.pending + m.processing
         isGenerating    = queueDepth > 0
+    }
+
+    // MARK: - Folder management
+
+    /// Create a new folder with the given name.
+    @discardableResult
+    func createFolder(name: String, colorHex: String = "5E7CE2") -> Folder {
+        let folder = Folder(name: name, colorHex: colorHex)
+        folders.append(folder)
+        try? persistence.saveFolders(folders)
+        return folder
+    }
+
+    func renameFolder(id: UUID, to newName: String) {
+        guard let idx = folders.firstIndex(where: { $0.id == id }) else { return }
+        folders[idx].name = newName
+        try? persistence.saveFolders(folders)
+    }
+
+    func updateFolderColor(id: UUID, colorHex: String) {
+        guard let idx = folders.firstIndex(where: { $0.id == id }) else { return }
+        folders[idx].colorHex = colorHex
+        try? persistence.saveFolders(folders)
+    }
+
+    /// Delete a folder. Decks inside are moved to the root (folderID = nil).
+    func deleteFolder(id: UUID) {
+        folders.removeAll { $0.id == id }
+        for i in decks.indices where decks[i].folderID == id {
+            decks[i].folderID = nil
+        }
+        try? persistence.saveFolders(folders)
+        try? persistence.save(decks)
+    }
+
+    /// Move a deck to a folder (pass nil to move to root).
+    func moveDeck(id: UUID, toFolder folderID: UUID?) {
+        guard let idx = decks.firstIndex(where: { $0.id == id }) else { return }
+        decks[idx].folderID = folderID
+        try? persistence.save(decks)
+    }
+
+    /// Decks that belong to the given folder (nil = root / unfiled).
+    func decks(in folderID: UUID?) -> [FlashcardDeck] {
+        decks.filter { $0.folderID == folderID }
     }
 
     // MARK: - Study session
@@ -197,6 +236,13 @@ final class FlashcardsViewModel: ObservableObject {
         return Double(currentCardIndex + 1) / Double(deck.cards.count)
     }
 
+    func deleteDeck(at offsets: IndexSet, in folderID: UUID?) {
+        let filtered = decks(in: folderID)
+        let idsToDelete = offsets.map { filtered[$0].id }
+        decks.removeAll { idsToDelete.contains($0.id) }
+        try? persistence.save(decks)
+    }
+
     func deleteDeck(at offsets: IndexSet) {
         decks.remove(atOffsets: offsets)
         try? persistence.save(decks)
@@ -204,12 +250,10 @@ final class FlashcardsViewModel: ObservableObject {
 
     // MARK: - Card editing on saved decks
 
-    /// Update a card in a saved deck (e.g. after adding/removing attachments).
     func updateCard(_ card: Flashcard, in deck: FlashcardDeck) {
         guard let deckIdx = decks.firstIndex(where: { $0.id == deck.id }),
               let cardIdx = decks[deckIdx].cards.firstIndex(where: { $0.id == card.id }) else { return }
         decks[deckIdx].cards[cardIdx] = card
-        // Keep activeDeck in sync if it's the current study deck
         if activeDeck?.id == deck.id {
             activeDeck = decks[deckIdx]
         }

@@ -79,6 +79,22 @@ struct Flashcard: Identifiable, Codable, Equatable {
     }
 }
 
+// MARK: - Folder
+
+struct Folder: Identifiable, Codable, Equatable {
+    let id: UUID
+    var name: String
+    var colorHex: String   // e.g. "4A90D9" for tinting the folder icon
+    let createdAt: Date
+
+    init(id: UUID = UUID(), name: String, colorHex: String = "5E7CE2", createdAt: Date = .now) {
+        self.id = id
+        self.name = name
+        self.colorHex = colorHex
+        self.createdAt = createdAt
+    }
+}
+
 // MARK: - FlashcardDeck
 
 struct FlashcardDeck: Identifiable, Codable {
@@ -86,12 +102,15 @@ struct FlashcardDeck: Identifiable, Codable {
     let sourceNote: VoiceNote
     var cards: [Flashcard]
     let createdAt: Date
+    /// The folder this deck belongs to, or nil for the root level.
+    var folderID: UUID?
 
-    init(id: UUID = UUID(), sourceNote: VoiceNote, cards: [Flashcard], createdAt: Date = .now) {
+    init(id: UUID = UUID(), sourceNote: VoiceNote, cards: [Flashcard], createdAt: Date = .now, folderID: UUID? = nil) {
         self.id = id
         self.sourceNote = sourceNote
         self.cards = cards
         self.createdAt = createdAt
+        self.folderID = folderID
     }
 
     var title: String {
